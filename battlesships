@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+import psutil
+import os
+import sys
+import subprocess
+import time
+
+def do_log(pid):
+    with open("/home/shot/log", "a") as f:
+        f.write("%s %d\n" % (os.environ.get("SSH_CLIENT"), pid))
+
+def log_hit(pid, name):
+    with open("/home/shot/log", "a") as f:
+        f.write("HIT %s %d %s\n" % (os.environ.get("SSH_CLIENT"), pid, name))
+
+
+with open('/etc/issue') as f:
+    print(f.read())
+
+if len(sys.argv) != 3:
+    do_log(-1)
+    print("Usage: ssh shot@battlesships.example.com <pid>")
+    exit(1)
+
+if sys.argv[0] != "/usr/local/bin/battlesships" or sys.argv[1] != "-c":
+    do_log(-2)
+    print("Usage: ssh shot@battlesships.example.com <pid>")
+    exit(1)
+
+try:
+    pid = int(sys.argv[2])
+except ValueError:
+    print("pid must be an integer")
+    do_log(-3)
+    exit(1)
+
+if pid < 1:
+    print("pid must be >= 1")
+    do_log(-4)
+    exit(1)
+
+if pid > 10000:
+    print("pid must be <= 10000")
+    do_log(-4)
+    exit(1)
+
+do_log(pid)
+for proc in psutil.process_iter():
+    try:
+        if proc.pid == pid:
+            name = proc.name()
+            log_hit(pid, name)
+            print("You hit '%s'..." % (name))
+            subprocess.run(["sudo", "kill", "-9", str(pid)])
+            time.sleep(0.5)
+            if psutil.pid_exists(pid):
+                print("...but it survived.")
+            else:
+                print("...it sank!")
+            exit(0)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        pass
+
+print("Miss!")
+exit(0)
